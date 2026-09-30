@@ -1,0 +1,43 @@
+name: Website Check
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: website-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run check
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: python3 check.py
+
+      - name: Save state
+        run: |
+          git config user.name "status-bot"
+          git config user.email "status-bot@users.noreply.github.com"
+          if [ -n "$(git status --porcelain state.json)" ]; then
+            git add state.json
+            git commit -m "Update state"
+            git push
+          fi
+
+      - name: Keepalive (Commit alle ~30 Tage)
+        run: |
+          last=$(git log -1 --format=%ct)
+          now=$(date +%s)
+          if [ $((now - last)) -gt 2592000 ]; then
+            git commit --allow-empty -m "Keepalive"
+            git push
+          fi
